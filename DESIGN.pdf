@@ -1,0 +1,62 @@
+As of the last assignment, the flow of work done in order to read/process requests has been unchanged aside from a few changes I will list now.
+    
+- Added more places where the socket was meant to be closed after writing a response.
+- Added a resetting of the status_code in processs_request.
+
+Now, the functions read_http_response and process_request are called inside of a function named begin_work.
+this function is now called within the worker function, which handles the task given to each thread. 
+
+Now, from reading in optional arguments to sending a response I will explain the main flow of the program.
+
+First, arguments are read in and trigger switches based on if they were recognized or not.
+if they were we take their individual arguments and either set them to be the name of the log file, or the number of threads.
+If an argument is not recognized we assume that that is the port given to us, and we set that accordingly.
+(If no number of threads are specified we keep the default of 4)
+(if we flag for logging but provide no logfile we error)
+
+Then the start generating out threads, by looping until the number of threads specified and use pthread_create.
+Along with this we create out queue to later be used as a queue of socket_fd's to write/handle.
+
+Once the threads are created the program proceeds with the usual process of accepting data from a socket, only now
+we lock right after accept. We enqueue that socket_fd and signal a worker thread to begin the usual handling process with begin_work.
+once the signaling is done we unlock and loop back up to our original while loop that waits on accept.
+
+Here, main works as a dispatcher assigning sockets to each thread when it can.
+
+Now within the worker thread, we make our own message httpObject to use and loop forever.
+Once inside our loop we lock and wait if the front of the queue is NULL. This means that
+there are no "jobs" to do. Once signaled we now check that the front is not null, in case any other thread was able to get to it first,
+if there is something at the front of the queue, we take it and store it into a local variable my_sock, and then dequeue the queue.
+we then unlock this critical section and then call the function begin_work with "my_sock" and the local message object.
+
+Begin work handles requests similarly except now at the end of the processing instead of finishing, we kick off a function write_log
+IFF the logging flag was set during execution. Otherwise it simply ends the way asgn1 ends.
+
+write_log handles writing to the log_file specified by sprintf-ing into a header buffer called log_buff which simply formats the first line of the log i.e "GET /geralt length 47\n"
+It knows WHERE to write and does not overlap with others by writing to a "personal offset" which is a local variable that grabs the global offset under a lock.
+It calculates how much it will need for its own logging request and then increments the global offset by that amount for future/concurrent logs. It is then unlocked.
+
+Before the calculation is done, it could be a log for a failed request, which simply calculates the new offset by creating a FAIL: header, and getting the length of that to increment.
+If it is not a failed request or a HEAD request it then proceeds with the calculation described above, otherwise, a HEAD like a failed request will simply set a new offset with its header length.
+In addition to this, the logger also handles incrementing global variables numError and entries, under a lock, when an entry is given and if an entry was a failed request.
+
+after this returns we are at the end of the cycle for a threads handling of a request, and it heads back up to its while loop and waits for a signal again.
+
+
+variables shared between threads:
+lflag -- flag for logging
+offset -- log file offset for safe writing
+mutex -- for locking
+condition_variable --for signaling
+numError -- number of errors signaled by logger
+entries -- number of entries set by logger
+
+This system is thread safe because anytime something is accessed or modified as explained above the threads operate under a lock.
+The design for the logging works because no thread will ever think it can write at a spot that interferes with another thread's logging.
+It will never write past the future/concurrent offset because before writing is even done the new global offset was calculated with what was to be written.
+Thank you, fstat. This makes it so if another thread is in the middle of logging, I will already be at the end of the space that thread needs. And so on and so on.
+
+
+Unfortunately I could not work out the logic for converting file contents to hex.
+
+queue struct implemented from here: https://www.geeksforgeeks.org/queue-linked-list-implementation/

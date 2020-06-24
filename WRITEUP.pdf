@@ -1,0 +1,13 @@
+When running the test of asgn1 VS asgn2 when GETin a large(400MiB) using time, erroneously I believe, I notice a slight speedup.
+
+The speedup is observed as under user 0.088s to 0.008s(multithreaded), the other values appeared more or less the same.
+
+Within my system I believe the bottleneck is the way main handles dispatching. The queue is fairly redundant thanks to the way accept and sockets work.
+
+At a time there can be as many concurrent worker threads and loggers(handled by the same threads) working together as there is allowed(default 4).
+There is only one dispatcher however. Perhaps I could find a way to have multiple dispatchers available to send socket_fd's off to threads. 
+
+I believe the dispatcher is the bottleneck here.
+
+We would not log the entire contents of the file in real life because files could be enormous and we would not need to see/have all of that data. 
+
