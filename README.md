@@ -1,5 +1,7 @@
-Run with ./httpserver [optional flags in any order]* PORT [optional flags in any order]*
+Run with ./httpserver PORT
 
-As of this version of the repo, the only thing left unimplemented is the hex conversion of the file contents logging.
+- additionally, add optional flags [-N int] , [-l name_of_logfile] along with the PORT in any order
+-N sets the number of threads to use, degault N=4
+-l sets a log file to log the requests sent to the servers.
 
-The program properly logs, minus any hex conversion, and truncates the log_file when the server starts(Though the test fails sadly).
+Logfile truncated on each run. 
